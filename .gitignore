@@ -3,3 +3,7 @@
 .idea/*
 *.iml
 __pycache__/
+
+output/
+output/*
+

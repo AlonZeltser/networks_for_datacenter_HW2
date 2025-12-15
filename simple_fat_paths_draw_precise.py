@@ -111,7 +111,8 @@ def draw_fat_tree_with_host_numbers(
       the subscription counts will be drawn near the link midpoints and the link linewidth
       will be increased proportionally to the count (bounded to avoid over-thick lines).
     """
-
+    if model.k > 8:
+        return
     edge_pos = _compute_edge_positions(model.edge_count, model.pods_count)
     agg_pos = _compute_aggregate_positions(model.aggregate_count, model.pods_count)
     total_width = max(model.pods_count, 1) * 1.0

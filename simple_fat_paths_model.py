@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import NamedTuple
 
 
 class LevelType(Enum):
@@ -15,43 +16,49 @@ class LinkType(Enum):
     A_C = "a_c"  # Aggregate to Core
 
 
-Peer = tuple[LevelType, int]
+class Peer(NamedTuple):
+    level: LevelType
+    index: int
 
+class Peers(NamedTuple):
+    src: Peer
+    dst: Peer
 
 @dataclass(frozen=True, slots=True)
 class FTDirectedLink:
     link_type: LinkType
-    peers: tuple[Peer, Peer]
+    peers: Peers
 
     def validate(self) -> None:
-        source = self.peers[0]
-        destination = self.peers[1]
+        source = self.peers.src
+        destination = self.peers.dst
         allowed = {
             LinkType.H_E: {(LevelType.HOST, LevelType.EDGE), (LevelType.EDGE, LevelType.HOST)},
             LinkType.E_A: {(LevelType.EDGE, LevelType.AGGREGATE), (LevelType.AGGREGATE, LevelType.EDGE)},
             LinkType.A_C: {(LevelType.AGGREGATE, LevelType.CORE), (LevelType.CORE, LevelType.AGGREGATE)},
         }[self.link_type]
-        if (source[0], destination[0]) not in allowed:
-            raise ValueError(f"Invalid levels for {self.link_type} link: {source[0]} to {destination[0]}")
+        if (source.level, destination.level) not in allowed:
+            raise ValueError(f"Invalid levels for {self.link_type} link: {source.level} to {destination.level}")
 
     @property
     def src(self) -> Peer:
-        return self.peers[0]
+        return self.peers.src
 
     @property
     def dst(self) -> Peer:
-        return self.peers[1]
+        return self.peers.dst
 
     # lower level is first, direction is not preserved
-    def create_tuple(self):
+    def create_hierarchical_tuple(self):
         self.validate()
-        flip = self.link_type == LinkType.H_E and self.peers[0][0] == LevelType.EDGE \
-               or self.link_type == LinkType.E_A and self.peers[0][0] == LevelType.AGGREGATE \
-               or self.link_type == LinkType.A_C and self.peers[0][0] == LevelType.CORE
-        return self.peers[1][1] if flip else self.peers[0][1], self.peers[0][1] if flip else self.peers[1][1]
+        flip = self.link_type == LinkType.H_E and self.peers.src.level == LevelType.EDGE \
+               or self.link_type == LinkType.E_A and self.peers.src.level == LevelType.AGGREGATE \
+               or self.link_type == LinkType.A_C and self.peers.src.level == LevelType.CORE
+        return (self.peers.dst.index if flip else self.peers.src.index,
+                self.peers.src.index if flip else self.peers.dst.index)
 
     def __repr__(self):
-        return f"\n\t - {self.peers[0][0].value}: {self.peers[0][1]} -> {self.peers[1][0].value}: {self.peers[1][1]}"
+        return f"\n\t - {self.peers.src.level.value}: {self.peers.src.index} -> {self.peers.dst.level.value}: {self.peers.dst.index}"
 
     def __str__(self):
         return f"{self.link_type}: {self.peers})"
@@ -116,7 +123,7 @@ class Model:
         # Remove a percentage of edge-aggregate links
         ea_links = self.links[LinkType.E_A]
         num_ea_to_remove = int(len(ea_links) * edge_aggregate)
-        ea_links_to_choose = ea_links if balanced else ea_links[0:len(ea_links) // 2]
+        ea_links_to_choose = ea_links if balanced else ea_links[0:len(ea_links) // 3]
         ea_links_to_remove = random.sample(ea_links_to_choose, num_ea_to_remove)
         for link in ea_links_to_remove:
             self.links[LinkType.E_A].remove(link)
@@ -124,7 +131,7 @@ class Model:
         # Remove a percentage of aggregate-core links
         ac_links = self.links[LinkType.A_C]
         num_ac_to_remove = int(len(ac_links) * aggregate_core)
-        ac_links_to_choose = ac_links if balanced else ac_links[0:len(ac_links) // 2]
+        ac_links_to_choose = ac_links if balanced else ac_links[0:len(ac_links) // 3]
         ac_links_to_remove = random.sample(ac_links_to_choose, num_ac_to_remove)
         for link in ac_links_to_remove:
             self.links[LinkType.A_C].remove(link)
@@ -132,7 +139,7 @@ class Model:
     def path_exist(self, path: DirectedPath) -> bool:
         for link in path.links:
             link.validate()
-            if link.create_tuple() not in self.links[link.link_type]:
+            if link.create_hierarchical_tuple() not in self.links[link.link_type]:
                 return False
         return True
 
@@ -148,12 +155,13 @@ class Model:
 
         src_pod = src_edge // edges_per_pod
         dst_pod = dst_edge // edges_per_pod
-
-        if src_edge == dst_edge:
+        if src_host == dst_host:
+            pass
+        elif src_edge == dst_edge:
             # Same edge switch
             path = DirectedPath(
-                links=[FTDirectedLink(LinkType.H_E, ((LevelType.HOST, src_host), (LevelType.EDGE, src_edge))),
-                       FTDirectedLink(LinkType.H_E, ((LevelType.EDGE, dst_edge), (LevelType.HOST, dst_host)))])
+                links=[FTDirectedLink(LinkType.H_E, (Peers(Peer(LevelType.HOST, src_host), Peer(LevelType.EDGE, src_edge)))),
+                       FTDirectedLink(LinkType.H_E, (Peers(Peer(LevelType.EDGE, dst_edge), Peer(LevelType.HOST, dst_host))))])
             if self.path_exist(path):
                 paths.append(path)
         elif src_pod == dst_pod:
@@ -161,10 +169,10 @@ class Model:
             for agg in range(aggs_per_pod):
                 agg_id = src_pod * aggs_per_pod + agg
                 path = DirectedPath(links=[
-                    FTDirectedLink(LinkType.H_E, ((LevelType.HOST, src_host), (LevelType.EDGE, src_edge))),
-                    FTDirectedLink(LinkType.E_A, ((LevelType.EDGE, src_edge), (LevelType.AGGREGATE, agg_id))),
-                    FTDirectedLink(LinkType.E_A, ((LevelType.AGGREGATE, agg_id), (LevelType.EDGE, dst_edge))),
-                    FTDirectedLink(LinkType.H_E, ((LevelType.EDGE, dst_edge), (LevelType.HOST, dst_host)))
+                    FTDirectedLink(LinkType.H_E, Peers(Peer(LevelType.HOST, src_host), Peer(LevelType.EDGE, src_edge))),
+                    FTDirectedLink(LinkType.E_A, Peers(Peer(LevelType.EDGE, src_edge), Peer(LevelType.AGGREGATE, agg_id))),
+                    FTDirectedLink(LinkType.E_A, Peers(Peer(LevelType.AGGREGATE, agg_id), Peer(LevelType.EDGE, dst_edge))),
+                    FTDirectedLink(LinkType.H_E, Peers(Peer(LevelType.EDGE, dst_edge), Peer(LevelType.HOST, dst_host)))
                 ])
                 if self.path_exist(path):
                     paths.append(path)
@@ -177,22 +185,18 @@ class Model:
                     for core in range(cors_per_group):
                         core_id = src_agg * cors_per_group + core
                         path = DirectedPath(links=[
-                            FTDirectedLink(LinkType.H_E, ((LevelType.HOST, src_host), (LevelType.EDGE, src_edge))),
-                            FTDirectedLink(LinkType.E_A,
-                                           ((LevelType.EDGE, src_edge), (LevelType.AGGREGATE, src_agg_id))),
-                            FTDirectedLink(LinkType.A_C,
-                                           ((LevelType.AGGREGATE, src_agg_id), (LevelType.CORE, core_id))),
-                            FTDirectedLink(LinkType.A_C,
-                                           ((LevelType.CORE, core_id), (LevelType.AGGREGATE, dst_agg_id))),
-                            FTDirectedLink(LinkType.E_A,
-                                           ((LevelType.AGGREGATE, dst_agg_id), (LevelType.EDGE, dst_edge))),
-                            FTDirectedLink(LinkType.H_E, ((LevelType.EDGE, dst_edge), (LevelType.HOST, dst_host)))
+                            FTDirectedLink(LinkType.H_E, Peers(Peer(LevelType.HOST, src_host), Peer(LevelType.EDGE, src_edge))),
+                            FTDirectedLink(LinkType.E_A, Peers(Peer(LevelType.EDGE, src_edge), Peer(LevelType.AGGREGATE, src_agg_id))),
+                            FTDirectedLink(LinkType.A_C, Peers(Peer(LevelType.AGGREGATE, src_agg_id), Peer(LevelType.CORE, core_id))),
+                            FTDirectedLink(LinkType.A_C, Peers(Peer(LevelType.CORE, core_id), Peer(LevelType.AGGREGATE, dst_agg_id))),
+                            FTDirectedLink(LinkType.E_A, Peers(Peer(LevelType.AGGREGATE, dst_agg_id), Peer(LevelType.EDGE, dst_edge))),
+                            FTDirectedLink(LinkType.H_E, Peers(Peer(LevelType.EDGE, dst_edge), Peer(LevelType.HOST, dst_host)))
                         ])
                         if self.path_exist(path):
                             paths.append(path)
         return paths
 
-    def calculate_paths_probability_distribution(self, paths: list[DirectedPath]) -> list[float]:
+    def calculate_paths_ecmp_probability_distribution(self, paths: list[DirectedPath]) -> list[float]:
         """Compute ECMP-like probability distribution over the provided equal-length paths.
 
         Algorithm:
@@ -209,39 +213,37 @@ class Model:
         """
 
         if not paths:
-            return []
+            raise ValueError("No paths provided for probability distribution calculation")
 
         # Helper: build ordered sequence of nodes (LevelType, id) for a DirectedPath
-        def path_to_nodes(dpath: DirectedPath) -> list[tuple[LevelType, int]]:
-            nodes: list[tuple[LevelType, int]] = []
+        def path_to_nodes(dpath: DirectedPath) -> list[Peer]:
+            nodes: list[Peer] = []
             # find starting node: the host in the first link
-            first_link = dpath.links[0]
-            # identify host peer
-            start = None
-            for lvl, idx in first_link.peers:
-                if lvl == LevelType.HOST:
-                    start = (lvl, idx)
-                    break
-            if start is None:
-                # If there's no host in first link, try to pick one endpoint as start (fallback)
-                start = first_link.peers[0]
+            assert dpath.links is not None \
+                and len(dpath.links) >= 2 \
+                and dpath.links[0].link_type == LinkType.H_E \
+                and dpath.links[-1].link_type == LinkType.H_E \
+                and dpath.links[0].src.level == LevelType.HOST \
+                and dpath.links[-1].dst.level == LevelType.HOST
+            # identify host peer and start from it
+            start = dpath.links[0].src
             nodes.append(start)
             cur = start
             # walk links in order, for each link append the other peer
             for link in dpath.links:
-                # ensure link contains current node
-                if cur not in link.peers:
-                    # try to match by id and level mismatch: find matching by id only
+                a, b = link.peers.src, link.peers.dst
+                # ensure link contains current node (by equality or by id)
+                if cur != a and cur != b:
+                    # try to match by id only
                     matched = None
-                    for p in link.peers:
-                        if p[1] == cur[1]:
+                    for p in (a, b):
+                        if p.index == cur.index:
                             matched = p
                             break
                     if matched is None:
                         raise ValueError(f"Path link sequence inconsistent, current node {cur} not in link {link}")
                     cur = matched
                 # the other peer is next
-                a, b = link.peers[0], link.peers[1]
                 next_node = b if cur == a else a
                 nodes.append(next_node)
                 cur = next_node
@@ -255,8 +257,8 @@ class Model:
             raise ValueError("All provided paths must have equal length")
         L = link_counts[0]
 
-        # For each hop index compute branching sets: map (node_at_i) -> set(next_node_at_i+1)
-        branching_maps: list[dict[tuple[LevelType, int], set[tuple[LevelType, int]]]] = [dict() for _ in range(L)]
+        # For each hop index compute branching sets: map node_at_i (Peer) -> set(next_node_at_i+1) (Peer)
+        branching_maps: list[dict[Peer, set[Peer]]] = [dict() for _ in range(L)]
         for seq in node_seqs:
             for i in range(L):
                 cur = seq[i]
@@ -298,8 +300,11 @@ class Model:
         s = sum(probs)
         if abs(s - 1.0) > 1e-9:
             # renormalize
-            probs = [p / s for p in probs]
+            reload = [p / s for p in probs]
         return probs
+
+    def total_directed_links_count(self) -> int:
+        return sum(len(links) for links in self.links.values()) * 2  # each link is bidirectional
 
     def __repr__(self):
         return (f"SimpleFatTreeModel(k={self.k}, hosts={self.hosts_count}, "
@@ -309,9 +314,9 @@ class Model:
 
 from collections import Counter
 
-links = [
-    FTDirectedLink(LinkType.H_E, ((LevelType.HOST, 7), (LevelType.EDGE, 3))),
-    FTDirectedLink(LinkType.H_E, ((LevelType.EDGE, 3), (LevelType.HOST, 7))),  # same key
+c_example = [
+    FTDirectedLink(LinkType.H_E, Peers(Peer(LevelType.HOST, 7), Peer(LevelType.EDGE, 3))),
+    FTDirectedLink(LinkType.H_E, Peers(Peer(LevelType.EDGE, 3), Peer(LevelType.HOST, 7))),  # same key
 ]
-c = Counter(links)
-print(c[links[0]])  # 2
+cc = Counter(c_example)
+print(cc[c_example[0]])  # 2

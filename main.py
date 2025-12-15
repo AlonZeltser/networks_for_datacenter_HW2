@@ -25,7 +25,7 @@ def scenario_3():
     draw_fat_tree_with_host_numbers(model)
     paths = model.calculate_possible_paths(10, 20)
     print("\n Path:".join(map(str, paths)))
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print("\n Distribution:".join(map(str, distributions)))
 
 
@@ -37,19 +37,19 @@ def scenario_4():
     paths = model.calculate_possible_paths(0, 1)
     print("In TOR:")
     print(paths)
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print(f"Distributions: {distributions}")
 
     paths = model.calculate_possible_paths(0, 2)
     print("In POD:")
     print("\n Path:".join(map(str, paths)))
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print(f"Distributions: {distributions}")
 
     paths = model.calculate_possible_paths(0, 15)
     print("Cross POD:")
     print("\n Path:".join(map(str, paths)))
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print(f"Distributions: {distributions}")
 
     print("================================ Drop links ================================")
@@ -58,19 +58,19 @@ def scenario_4():
     paths = model.calculate_possible_paths(0, 1)
     print("In TOR:")
     print("\n Path:".join(map(str, paths)))
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print(f"Distributions: {distributions}")
 
     paths = model.calculate_possible_paths(0, 2)
     print("In POD:")
     print("\n Path:".join(map(str, paths)))
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print(f"Distributions: {distributions}")
 
     paths = model.calculate_possible_paths(0, 15)
     print("Cross POD:")
     print("\n Path:".join(map(str, paths)))
-    distributions = model.calculate_paths_probability_distribution(paths)
+    distributions = model.calculate_paths_ecmp_probability_distribution(paths)
     print(f"Distributions: {distributions}")
 
 
@@ -88,16 +88,22 @@ def scenario_5():
 
 
 def scenario_6():
-    links_to_remove_list = [0.0, 0.05, 0.1, 0.25]
-    for k in [4, 6, 8]:
-        for links_to_remove in links_to_remove_list:
-            print("running for k =", k, " removing ", links_to_remove*100, "% links")
-            model = Model(k)
-            model.remove_links(links_to_remove / 2, links_to_remove / 2, False)
-            file_prefix = f"fat_tree_k{k}_remove_factor_{links_to_remove:.2f}"
-            draw_fat_tree_with_host_numbers(model, show=False, save_path=f"{file_prefix}.png", number_hosts=True,
-                                            start_index=0, max_labels=200)
-            run_all_to_all_test_case(model, iterations=10, draw_each_iter=True, save_prefix=file_prefix)
+    balancing = {"balanced": True, "unbalanced": False}
+    removal_iterations: int = 3
+    links_to_remove_list = [0.0, 0.1, 0.2, 0.4]
+    for k in [8, 10]:
+        for balance_name, balance in balancing.items():
+            print(f"running {balance_name} mode for k = {k}")
+            for links_to_remove in links_to_remove_list:
+                print("running for k =", k, "balance mode ", balance_name , " removing ", links_to_remove*100, "% links")
+                for removal_iteration in range(removal_iterations):
+                    print(f"Removal iteration {removal_iteration}")
+                    model = Model(k)
+                    model.remove_links(links_to_remove / 2, links_to_remove / 2, balance)
+                    file_prefix = f"fat_tree_{k}_{balance_name}_removed_{links_to_remove:.2f}_remove{removal_iteration}"
+                    draw_fat_tree_with_host_numbers(model, show=False, save_path=f"{file_prefix}.png", number_hosts=True,
+                                                    start_index=0, max_labels=200)
+                    run_all_to_all_test_case(model, iterations=10, draw_each_iter=False, save_prefix=file_prefix)
 
 
 def main():

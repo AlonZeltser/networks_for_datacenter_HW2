@@ -12,7 +12,7 @@ from simple_fat_paths_model import Model, DirectedPath
 def _link_key_from_directed_link(dlink) -> tuple:
     # dlink is FTDirectedLink-like object with .link_type and .create_tuple()
     try:
-        tup = dlink.create_tuple()
+        tup = dlink.create_hierarchical_tuple()
     except Exception:
         # fallback: try to build from peers
         peers = getattr(dlink, 'peers', None)
@@ -23,54 +23,61 @@ def _link_key_from_directed_link(dlink) -> tuple:
     return (dlink.link_type, tup)
 
 
-def draw_save_statistics(per_iter_subs: list[Counter], save_prefix: str, per_iter_host_counts: list,
-                         model: Model, subscriptions: Counter):
-    if per_iter_subs:
-        # determine max observed count across all iterations to align bins
-        max_count_overall = 0
-        per_iter_counts_lists = []
-        for it_sub in per_iter_subs:
-            counts = list(it_sub.values())
-            per_iter_counts_lists.append(counts)
-            if counts:
-                max_count_overall = max(max_count_overall, max(counts))
-        # If no link ever had any subscriptions, skip
-        if max_count_overall > 0:
-            bins = np.arange(0, max_count_overall + 2)  # integer bins [0..max_count]
-            hist_mat = []
-            for counts in per_iter_counts_lists:
-                # counts might be empty if no links were used this iteration: histogram of empty is zeros
-                h, _ = np.histogram(counts, bins=bins)
-                hist_mat.append(h)
-            hist_arr = np.vstack(hist_mat)  # shape (iterations, nbins-1)
-            mean_per_bin = hist_arr.mean(axis=0)
-            std_per_bin = hist_arr.std(axis=0)
-            min_per_bin = hist_arr.min(axis=0)
-            max_per_bin = hist_arr.max(axis=0)
+def draw_save_statistics(per_iter_subs: list[Counter], save_prefix: str, per_iter_host_counts: list, total_links: int) :
+    iteration_count = len(per_iter_subs)
+    for i, iter_sub in enumerate(per_iter_subs):
+        pass
+        # print(f"====================== Iteration {i} ======================")
+        # print(f"iter_sub: {i}")
+        # print(iter_sub)
 
-            bin_centers = bins[:-1]
-            plt.figure()
-            # shaded min-max region
-            plt.fill_between(bin_centers, min_per_bin, max_per_bin, color='C0', alpha=0.12, label='min-max')
-            plt.bar(bin_centers, mean_per_bin, align='center', width=0.8, color='C0', label='mean links per bin')
-            # plot std as errorbars
-            plt.errorbar(bin_centers, mean_per_bin, yerr=std_per_bin, fmt='none', ecolor='black', capsize=3,
-                         label='std')
-            plt.xlabel('Subscriptions per link (bin)')
-            plt.ylabel('Average number of links')
-            plt.title('Average histogram of subscriptions per link (with std error bars and min/max band)')
-            # annotate overall summary
-            props = dict(boxstyle='round', facecolor='white', alpha=0.8)
-            txt = f"iters={len(per_iter_subs)}\nmax_count={int(max_count_overall)}"
-            plt.gca().text(0.95, 0.95, txt, transform=plt.gca().transAxes, fontsize=8, va='top', ha='right', bbox=props)
-            plt.legend(loc='upper right')
-            if save_prefix:
-                os.makedirs('output', exist_ok=True)
-                path = os.path.join('output', f"{save_prefix}_subscriptions_per_link_hist.png")
-                plt.savefig(path, dpi=150)
-            else:
-                plt.show()
-            plt.close()
+    # determine max observed count across all iterations to align bins
+    max_count_overall = 0
+    per_iter_counts_lists = []
+    for it_sub in per_iter_subs:
+        counts = list(it_sub.values())
+        if not counts:
+            breakpoint()
+        per_iter_counts_lists.append(counts)
+        max_count_overall = max(max_count_overall, max(counts))
+
+    bins = np.arange(0, max_count_overall + 2)  # integer bins [0..max_count]
+    hist_mat = []
+    for counts in per_iter_counts_lists:
+        # counts might be empty if no links were used this iteration: histogram of empty is zeros
+        h, _ = np.histogram(counts, bins=bins)
+        h[0] = (total_links - len(counts))  # account for links with zero subscriptions
+        hist_mat.append(h)
+
+    hist_arr = np.vstack(hist_mat)  # shape (iterations, nbins-1)
+    mean_per_bin = hist_arr.mean(axis=0)
+    std_per_bin = hist_arr.std(axis=0)
+    min_per_bin = hist_arr.min(axis=0)
+    max_per_bin = hist_arr.max(axis=0)
+
+    bin_centers = bins[:-1]
+    plt.figure()
+    # shaded min-max region
+    plt.fill_between(bin_centers, min_per_bin, max_per_bin, color='C0', alpha=0.12, label='min-max')
+    plt.bar(bin_centers, mean_per_bin, align='center', width=0.8, color='C0', label='mean links per bin')
+    # plot std as errorbars
+    plt.errorbar(bin_centers, mean_per_bin, yerr=std_per_bin, fmt='none', ecolor='black', capsize=3,
+                 label='std')
+    plt.xlabel('Subscriptions per link (bin)')
+    plt.ylabel('Average number of links')
+    plt.title('Average histogram of subscriptions per link (with std error bars and min/max band)')
+    # annotate overall summary
+    props = dict(boxstyle='round', facecolor='white', alpha=0.8)
+    txt = f"iters={len(per_iter_subs)}\nmax_count={int(max_count_overall)}"
+    plt.gca().text(0.95, 0.95, txt, transform=plt.gca().transAxes, fontsize=8, va='top', ha='right', bbox=props)
+    plt.legend(loc='upper right')
+    if save_prefix:
+        os.makedirs('output', exist_ok=True)
+        path = os.path.join('output', f"{save_prefix}_subscriptions_per_link_hist.png")
+        plt.savefig(path, dpi=150)
+    else:
+        plt.show()
+    plt.close()
 
     # Histogram of subscriptions per host (i.e., destination popularity), per-iteration stats
     if per_iter_host_counts:
@@ -115,7 +122,7 @@ def draw_save_statistics(per_iter_subs: list[Counter], save_prefix: str, per_ite
 
 
 def run_all_to_all_test_case(model: Model, iterations: int, draw_each_iter: bool,
-                             save_prefix: str):
+                             save_prefix: str, ecmp: bool = True) -> Counter:
     """Run all-to-all tests for `iterations` rounds.
 
     - Accumulates subscription counts per link (keyed as (LinkType, (a,b))).
@@ -137,28 +144,26 @@ def run_all_to_all_test_case(model: Model, iterations: int, draw_each_iter: bool
         print(f"running iteration {i + 1} / {iterations}")
         iter_subs = Counter()
         iter_host_subs = Counter()
-
-        destinations = random.sample(range(model.hosts_count), model.hosts_count)
-        all_links = []
+        while True:
+            destinations = random.sample(range(model.hosts_count), model.hosts_count)
+            if all(src != dst for src, dst in enumerate(destinations)):
+                break  # valid sample
         for src in range(model.hosts_count):
             dst = destinations[src]
-            if src == dst:
-                continue
             paths: list[DirectedPath] = model.calculate_possible_paths(src, dst)
-            if len(paths) == 0:
-                break
-            distributions: list[float] = model.calculate_paths_probability_distribution(paths)
-            assert paths is not None and distributions is not None and len(paths) == len(distributions)
-            idx = random.choices(range(len(paths)), weights=distributions, k=1)[0]
-            selected_path = paths[idx]
-            # update subscription counters for each link in selected_path
-            for dlink in selected_path.links:
-                key = _link_key_from_directed_link(dlink)
-                subscriptions[key] += 1
-                iter_subs[key] += 1
-                all_links.append(key)
-            host_subscriptions[dst] += 1
-            iter_host_subs[dst] += 1
+            if len(paths) > 0:
+                distributions: list[float] = model.calculate_paths_ecmp_probability_distribution(paths=paths)
+                assert len(paths) == len(distributions)
+                idx = random.choices(range(len(paths)), weights=distributions, k=1)[0]
+                selected_path = paths[idx]
+                # update subscription counters for each link in selected_path
+                for dlink in selected_path.links:
+                    #key = _link_key_from_directed_link(dlink)
+                    key = dlink
+                    subscriptions[key] += 1
+                    iter_subs[key] += 1
+                host_subscriptions[dst] += 1
+                iter_host_subs[dst] += 1
 
         per_iter_subs.append(iter_subs)
         # produce a full-list host counts for this iteration (include zeros)
@@ -175,7 +180,7 @@ def run_all_to_all_test_case(model: Model, iterations: int, draw_each_iter: bool
     # After all iterations compute per-bin stats across iterations
     # Build per-iteration histograms for links
     draw_save_statistics(per_iter_subs=per_iter_subs, save_prefix=save_prefix,
-                         per_iter_host_counts=per_iter_host_counts, model=model, subscriptions=subscriptions)
+                         per_iter_host_counts=per_iter_host_counts, total_links=model.total_directed_links_count())
 
     # Return counters for programmatic use
-    return subscriptions, host_subscriptions
+    return subscriptions
