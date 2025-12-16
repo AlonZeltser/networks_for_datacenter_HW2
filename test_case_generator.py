@@ -184,3 +184,70 @@ def run_all_to_all_test_case(model: Model, iterations: int, draw_each_iter: bool
 
     # Return counters for programmatic use
     return subscriptions
+
+def select_path_ecmp(model: Model, paths: list[DirectedPath]) -> DirectedPath:
+    distributions: list[
+        float] = model.calculate_paths_ecmp_probability_distribution(paths=paths)
+    assert len(paths) == len(distributions)
+    idx = random.choices(range(len(paths)), weights=distributions, k=1)[0]
+    selected_path = paths[idx]
+    return selected_path
+
+def select_less_loaded_path(model: Model, paths: list[DirectedPath], subscriptions: Counter) -> DirectedPath:
+    # Select path with least total subscriptions (sum over links)
+    min_subs = None
+    selected_path = None
+    for path in paths:
+        total_subs = max(subscriptions[dlink] for dlink in path.links)
+        if (min_subs is None) or (total_subs < min_subs):
+            min_subs = total_subs
+            selected_path = path
+    return selected_path
+
+def run_routing_event(k: int, balance:bool, balance_name:str, links_to_remove: float, routing_method:str, removal_iteration:int, sending_iteration:int, model:Model):
+    link_subscriptions = Counter()
+    while True:
+        destinations = random.sample(range(model.hosts_count), model.hosts_count)
+        if all(src != dst for src, dst in enumerate(destinations)):
+            break  # valid sample
+    for src in range(model.hosts_count):
+        dst = destinations[src]
+        paths: list[DirectedPath] = model.calculate_possible_paths(src, dst)
+        if len(paths) > 0:
+            if routing_method == "ECMP":
+                selected_path = select_path_ecmp(model, paths)
+            elif routing_method == "available_paths":
+                selected_path = select_less_loaded_path(model, paths, link_subscriptions)
+            else:
+                raise ValueError(f"Unknown routing method: {routing_method}")
+            for dlink in selected_path.links:
+                link_subscriptions[dlink] += 1
+
+
+def run_test_package():
+    random.seed(1972)
+    balancing = {"balanced": True, "unbalanced": False}
+    links_fraction_to_remove = [0.4] # [0.0, 0.1, 0.2, 0.4]
+    removal_iterations = 1 # 3
+    k_s = [8] # [4, 8, 10]
+    routing_methods = ["ECMP", "available_paths"]
+    sending_iterations = 2 # 5
+    for k in k_s:
+        print("running for k =", k)
+        for balance_name, balance in balancing.items():
+            print(f"running {balance_name} mode for k = {k}")
+            for links_to_remove in links_fraction_to_remove:
+                print(f"removing {links_to_remove:.2f} fraction of links")
+                for removal_iteration in range(removal_iterations):
+                    print(f"removal iteration {removal_iteration}")
+                    model = Model(k)
+                    model.remove_links(links_to_remove / 2, links_to_remove / 2, balance)
+                    layout_file_prefix = f"fat_tree_{k}_{balance_name}_removed_{links_to_remove:.2f}_remove{removal_iteration}"
+                    draw_fat_tree_with_host_numbers(model, show=False, save_path=f"{layout_file_prefix}.png",
+                                                    number_hosts=True,
+                                                    subscriptions=None, show_subscriptions=False)
+                    for routing_method in routing_methods:
+                        print(f"\trouting mode {routing_method}")
+                        for sending_iteration in range(sending_iterations):
+                            print(f"\t\tsend distribution iteration {sending_iteration}")
+                            run_routing_event(k, balance, balance_name, links_to_remove, routing_method, removal_iteration, sending_iteration, model)

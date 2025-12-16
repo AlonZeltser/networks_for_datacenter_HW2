@@ -1,7 +1,7 @@
 from simple_fat_paths_draw import draw_fat_tree
 from simple_fat_paths_draw_precise import draw_fat_tree_with_host_numbers
 from simple_fat_paths_model import Model, LinkType
-from test_case_generator import run_all_to_all_test_case
+from test_case_generator import run_all_to_all_test_case, run_test_package
 
 
 # create a model, remove a link and draw the fat-tree
@@ -105,6 +105,8 @@ def scenario_6():
                                                     start_index=0, max_labels=200)
                     run_all_to_all_test_case(model, iterations=10, draw_each_iter=False, save_prefix=file_prefix)
 
+def scenario_7():
+    run_test_package()
 
 def main():
     # scenario_1()
@@ -112,7 +114,9 @@ def main():
     # scenario_3()
     # scenario_4()
     # scenario_5()
-    scenario_6()
+    # scenario_6()
+    scenario_7()
+
 
 
 if __name__ == '__main__':
