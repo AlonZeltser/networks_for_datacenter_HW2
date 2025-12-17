@@ -55,8 +55,16 @@ The core of the simulation is encapsulated in the `SimpleFatTreeModel` class. Th
 Then it connects them using simple mapping (lists). Thus it supports easily the bidirectional removal of links.
 The Model supports also some self-utility functions, the creation of all possible paths between any 2 hosts, and 2 mechanisms for assigning actual path, simulating ECMP and wider topology aware routing.  
 Below are some example visualizations of the fat-tree topologies used in the experiments:
-![](./experiment_outputs/layout_example_4_0.00_balanced.png "Visualization of k=4 Fat Tree with no dropped links")  
-![](./experiment_outputs/layout_example_8_0.40_unbalanced.png "Visualization of k=8 Fat Tree with 40% dropped links, unbalanced on the left side of the tree")
+<div style="display: flex; justify-content: space-around;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/layout_example_4_0.00_balanced.png" alt="Visualization of k=4 Fat Tree with no dropped links" style="width: 100%;">
+        <figcaption>Visualization of k=4 Fat Tree with no dropped links</figcaption>
+    </figure>
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/layout_example_8_0.30_unbalanced.png" alt="Visualization of k=8 Fat Tree with 30% dropped links, unbalanced on the left side of the tree" style="width: 100%;">
+        <figcaption>Visualization of k=8 Fat Tree with 30% dropped links, unbalanced on the left side of the tree</figcaption>
+    </figure>
+</div>
 
 
 ### Routing Methods  
@@ -86,38 +94,93 @@ Each run saves two kinds of artifacts per configuration:
 ## Test Case and Analysis    
   
 For the discussion in this report, I chose the following scenarios to emphasis the ECMP strengths and limitations:  
-1. Natural ECMP success: not link failures, over 8 and 16 Fat Tree topologies.
-2. Extreme link failures (40% removals), unbalanced and balanced, over 8 and 16 Fat Tree topologies.  
+1. Natural ECMP success: not link failures, over 8 and 12 Fat Tree topologies.
+2. Extreme link failures (30% removals), unbalanced and balanced, over 8 and 12 Fat Tree topologies.  
 In each scenario, I compared ECMP with the adaptive `next_best_paths` strategy.
 The discussion will follow the figures below:  
 ### Scenario A: ECMP Success (No Link Failures)  
 <div style="display: flex; justify-content: space-around;">
-    <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.00_ECMP_package_hist.png" alt="ECMP Success in k=8 Fat Tree with no link failures" style="width: 48%; margin: 1%;">
-    <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.00_next_best_paths_package_hist.png" alt="Adaptive Routing in k=8 Fat Tree with no link failures" style="width: 48%; margin: 1%;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.00_ECMP_package_hist.png" alt="ECMP in k=8 Fat Tree with no link failures" style="width: 100%;">
+        <figcaption>ECMP in k=8 Fat Tree with no link failures</figcaption>
+    </figure>
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.00_next_best_paths_package_hist.png" alt="Adaptive Routing in k=8 Fat Tree with no link failures" style="width: 100%;">
+        <figcaption>Adaptive Routing in k=8 Fat Tree with no link failures</figcaption>
+    </figure>
 </div>
 <div style="display: flex; justify-content: space-around;">
-    <img src="./experiment_outputs/fat_tree_16_balanced_removal_0.00_ECMP_package_hist.png" alt="ECMP Success in k=16 Fat Tree with no link failures" style="width: 48%; margin: 1%;">   
-    <img src="./experiment_outputs/fat_tree_16_balanced_removal_0.00_next_best_paths_package_hist.png" alt="Adaptive Routing in k=16 Fat Tree with no link failures" style="width: 48%; margin: 1%;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_12_balanced_removal_0.00_ECMP_package_hist.png" alt="ECMP in k=12 Fat Tree with no link failures" style="width: 100%;">
+        <figcaption>ECMP in k=12 Fat Tree with no link failures</figcaption>
+    </figure>   
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_12_balanced_removal_0.00_next_best_paths_package_hist.png" alt="Adaptive Routing in k=12 Fat Tree with no link failures" style="width: 100%;">
+        <figcaption>Adaptive Routing in k=12 Fat Tree with no link failures</figcaption>
+    </figure>
 </div>
   
-### Scenario B: ECMP Failure (40)  
+### Scenario B: ECMP Failure (30%) Link Failures)
 #### Balanced:
 <div style="display: flex; justify-content: space-around;">
-    <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.40_ECMP_package_hist.png" alt="ECMP in k=8 Fat Tree with 40% balanced link failures" style="width: 48%; margin: 1%;">
-    <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.40_next_best_paths_package_hist.png" alt="Adaptive Routing in k=8 Fat Tree with 40% balanced link failures" style="width: 48%; margin: 1%;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.30_ECMP_package_hist.png" alt="ECMP in k=8 Fat Tree with 30% balanced link failures" style="width: 100%;">
+        <figcaption>average subscription:  ECMP in k=8 30% balanced link failures</figcaption>
+    </figure>
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_balanced_removal_0.30_next_best_paths_package_hist.png" alt="Adaptive Routing in k=8 Fat Tree with 30% balanced link failures" style="width: 100%;">
+        <figcaption>average subscription: adaptive routing (reference) in k=8 30% balanced link failures</figcaption>
+    </figure>
 </div>
 
 #### Unbalanced:
 <div style="display: flex; justify-content: space-around;">
-    <img src="./experiment_outputs/fat_tree_8_unbalanced_removal_0.40_ECMP_package_hist.png" alt="ECMP in k=8 Fat Tree with 40% unbalanced link failures" style="width: 48%; margin: 1%;">
-    <img src="./experiment_outputs/fat_tree_8_unbalanced_removal_0.40_next_best_paths_package_hist.png" alt="Adaptive Routing in k=8 Fat Tree with 40% unbalanced link failures" style="width: 48%; margin: 1%;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_unbalanced_removal_0.30_ECMP_package_hist.png" alt="ECMP in k=8 Fat Tree with 30% unbalanced link failures" style="width: 100%;">
+        <figcaption>average subscription:  ECMP in k=8 30% unbalanced link failures</figcaption>
+    </figure>
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_unbalanced_removal_0.30_next_best_paths_package_hist.png" alt="Adaptive Routing in k=8 Fat Tree with 30% unbalanced link failures" style="width: 100%;">
+        <figcaption>average subscription: adaptive routing (reference) in k=8 30% unbalanced link failures</figcaption>
+    </figure>
 </div>
 
+### ECMP Performance vs. Adaptive Routing: overage of Max Link Subscription
+To quantify the performance difference between ECMP and the adaptive routing strategy, I calculated the  maximum link subscription across all configurations in each scenario. These are all averages over 5 iterations of random link removal X 5 iterations of random traffic permutations.
+
+<div style="display: flex; justify-content: space-around;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_balanced_removal_peak_load_combined.png" alt="Maximal link subscriptions for k=8 balanced link failures" style="width: 100%;">
+        <figcaption>Maximal link subscriptions for k=8 balanced link failures</figcaption>
+    </figure>
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_8_unbalanced_removal_peak_load_combined.png" alt="Maximal link subscriptions for k=8 unbalanced link failures" style="width: 100%;">
+        <figcaption>Maximal link subscriptions for k=8 unbalanced link failures</figcaption>
+    </figure>
+</div>
+<div style="display: flex; justify-content: space-around;">
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_12_balanced_removal_peak_load_combined.png" alt="Maximal link subscriptions for k=12 balanced link failures" style="width: 100%;">
+        <figcaption>Maximal link subscriptions for k=12 balanced link failures</figcaption>
+    </figure>
+    <figure style="width: 48%; margin: 1%; text-align: center;">
+        <img src="./experiment_outputs/fat_tree_12_unbalanced_removal_peak_load_combined.png" alt="Maximal link subscriptions for k=12 unbalanced link failures" style="width: 100%;">
+        <figcaption>Maximal link subscriptions for k=12 unbalanced link failures</figcaption>
+    </figure>
+</div>
 
 ## Interpreting the Plots
-- **Scenario A**: balanced topology, zero removals. ECMP histograms show narrow distributions clustered at low subscription counts, indicating even load.
-- **Scenario B**: unbalanced topology or high removal fractions (e.g., 40%). ECMP histograms present long tails and higher max bins, proving certain links are oversubscribed while others remain underutilized.
-- **Adaptive routing**: corresponding `next_best_paths` histograms flatten those tails, demonstrating that smarter path selection alleviates congestion without changing the topology.
+- **Scenario A**: We can see here a no removal scenario. The topology is balanced.  ECMP histograms show narrower distributions clustered at low subscription counts, indicating even load.  
+Still, the greedy next best path shows that we theoretically could have established better paths, and that ECMP misses the full potential of the network.
+- **Scenario B**: High Removal Fractions.  ECMP histograms present much longer tails than the next best path reference, and higher max bins.  
+This means that certain links are highly oversubscribed while others remain underutilized.
+This effect is more pronounced in unbalanced removals, where ECMP fails to adapt to the skewed topology, leading to severe congestion on a few links.
+  
+**Explanation:**  
+In both scenarios, ECMP's local decision-making leads to suboptimal global load distribution. As a switch that practice ECMP hashing has no visibility into the overall network state, it cannot account for link failures or uneven traffic patterns.  
+Thus, it occurs more often that a decision at the beginning of several paths lead to the same congested link, creating hotspots.
+
+
 
 ## Custom Experiments
 Adjust the parameters at the top of `run_test_package()`:
@@ -126,6 +189,6 @@ Adjust the parameters at the top of `run_test_package()`:
 - `removal_iterations`, `sending_iterations`: statistical robustness.
 - `routing_methods`: include or exclude strategies.
 
-## Next Steps
+## Possible Next Steps
 - Extend traffic models (e.g., unbalanced peers over the layout, bursty flows) to explore additional ECMP edge cases.
 - Add CLI flags for selecting specific scenarios.

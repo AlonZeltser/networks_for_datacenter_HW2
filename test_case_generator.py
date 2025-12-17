@@ -1,6 +1,7 @@
 import os
 import random
 from collections import Counter
+from typing import Any
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -30,7 +31,7 @@ def select_less_loaded_path(model: Model, paths: list[DirectedPath], subscriptio
     return selected_path
 
 
-def save_link_histogram(per_event_counters: list[Counter], total_links: int, save_path: str, title: str) -> None:
+def save_link_histogram(per_event_counters: list[Counter], total_links: int, save_path: str, title: str, average_disconnected_freq:float) -> None:
     if not per_event_counters:
         return
     directory = os.path.dirname(save_path)
@@ -64,7 +65,7 @@ def save_link_histogram(per_event_counters: list[Counter], total_links: int, sav
     plt.ylabel('Number of links')
     plt.title(title)
     max_bin = int(bin_centers.max()) if len(bin_centers) else 0
-    stats_text = f"events={len(per_event_counters)}\nmax_bin={max_bin}"
+    stats_text = f"events={len(per_event_counters)}\nmax_bin={max_bin}\naverage diconnected hosts={average_disconnected_freq *100:.2f%}"
     ax = plt.gca()
     ax.text(0.02, 0.95, stats_text, transform=ax.transAxes, fontsize=8,
             va='top', ha='left', bbox=dict(boxstyle='round', facecolor='white', alpha=0.85))
@@ -73,14 +74,44 @@ def save_link_histogram(per_event_counters: list[Counter], total_links: int, sav
     plt.savefig(save_path, dpi=150)
     plt.close()
 
+# after all removal levels for this (k, balance_name), save metric-vs-removal plots
+# Now supports plotting two series (e.g., ECMP and next_best_paths) on the same figure.
+def save_metric_vs_removal_curve(removal_levels,
+                                values_ecmp,
+                                values_next_best,
+                                save_path,
+                                title,
+                                ylabel):
+    if not removal_levels:
+        return
+    directory = os.path.dirname(save_path)
+    os.makedirs(directory if directory else ".", exist_ok=True)
+    xs = list(removal_levels)
+    ys_ecmp = list(values_ecmp)
+    ys_nb = list(values_next_best)
+    plt.figure(figsize=(6, 4))
+    plt.plot(xs, ys_ecmp, marker="o", label="ECMP")
+    plt.plot(xs, ys_nb, marker="s", label="next_best_paths")
+    plt.xlabel("Fraction of links removed")
+    plt.ylabel(ylabel)
+    plt.title(title)
+    plt.legend()
+    plt.grid(True, linestyle="--", alpha=0.4)
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=150)
+    plt.close()
+
 
 def run_routing_event(k: int, balance: bool, balance_name: str, links_to_remove: float, routing_method: str,
-                      removal_iteration: int, sending_iteration: int, model: Model) -> Counter:
+                      removal_iteration: int, sending_iteration: int, model: Model) -> tuple[Counter[Any], int]:
     link_subscriptions = Counter()
+    assert model.hosts_count > 1
+    # generate random permutation of destinations different from sources
     while True:
         destinations = random.sample(range(model.hosts_count), model.hosts_count)
         if all(src != dst for src, dst in enumerate(destinations)):
             break  # valid sample
+    disconnected_hosts = 0
     for src in range(model.hosts_count):
         dst = destinations[src]
         paths: list[DirectedPath] = model.calculate_possible_paths(src, dst)
@@ -93,63 +124,154 @@ def run_routing_event(k: int, balance: bool, balance_name: str, links_to_remove:
                 raise ValueError(f"Unknown routing method: {routing_method}")
             for dlink in selected_path.links:
                 link_subscriptions[dlink] += 1
-    return link_subscriptions
+        else:
+            disconnected_hosts += 1
+    return link_subscriptions, disconnected_hosts
 
 def run_test_package():
     random.seed(1972)
     balancing = {"balanced": True, "unbalanced": False}
-    links_fraction_to_remove = [0.0, 0.1, 0.2, 0.4]
+    links_fraction_to_remove = [0.0, 0.1, 0.2, 0.3]
     removal_iterations = 5
-    k_s = [4, 8, 16]
+    k_s = [4, 8, 12]
     routing_methods = ["ECMP", "next_best_paths"]
     sending_iterations = 5
     for k in k_s:
         print("running for k =", k)
         for balance_name, balance in balancing.items():
             print(f"running {balance_name} mode for k = {k}")
+
+            # For each (k, balance_name) we accumulate averages per removal fraction
+            avg_peakload_by_removal = {method: {} for method in routing_methods}
+
             for links_to_remove in links_fraction_to_remove:
                 print(f"removing {links_to_remove:.2f} fraction of links")
                 removal_level_counters = {
-                    method:
-                        [
-                            [Counter() for _ in range(sending_iterations)]
-                            for _ in range(removal_iterations)
-                        ]
-                     for method in routing_methods
+                    method: [
+                        [Counter() for _ in range(sending_iterations)]
+                        for _ in range(removal_iterations)
+                    ]
+                    for method in routing_methods
                 }
+                # metrics: peak load per event and disconnected hosts per removal iteration
+                removal_level_peak_loads = {
+                    method: [
+                        [0 for _ in range(sending_iterations)]
+                        for _ in range(removal_iterations)
+                    ]
+                    for method in routing_methods
+                }
+                disconnected_hosts_counter = {
+                    method: 0.0
+                    for method in routing_methods
+                }
+
                 total_links = Model(k).total_directed_links_count()
                 for removal_iteration in range(removal_iterations):
                     print(f"removal iteration {removal_iteration}")
                     model = Model(k)
-                    model.remove_links(links_to_remove / 2, links_to_remove / 2, balance)
+                    model.remove_links(links_to_remove, balance)
+
                     if removal_iteration == 0:
                         layout_file_prefix = f"layout_example_{k}_{links_to_remove:.2f}_{balance_name}"
-                        draw_fat_tree_with_host_numbers(model, show=False, save_path=f"{layout_file_prefix}.png",
-                                                        number_hosts=True,
-                                                        subscriptions=None, show_subscriptions=False)
+                        draw_fat_tree_with_host_numbers(
+                            model,
+                            show=False,
+                            save_path=f"{layout_file_prefix}.png",
+                            number_hosts=True,
+                            subscriptions=None,
+                            show_subscriptions=False,
+                        )
                     total_links = model.total_directed_links_count()
                     for routing_method in routing_methods:
                         print(f"\trouting mode {routing_method}")
                         for sending_iteration in range(sending_iterations):
                             print(f"\t\tsend distribution iteration {sending_iteration}")
-                            event_counter = run_routing_event(k, balance, balance_name, links_to_remove, routing_method,
-                                                              removal_iteration, sending_iteration, model)
+                            event_counter, disconnected_hosts = run_routing_event(
+                                k,
+                                balance,
+                                balance_name,
+                                links_to_remove,
+                                routing_method,
+                                removal_iteration,
+                                sending_iteration,
+                                model,
+                            )
+                            disconnected_hosts_counter[routing_method] += disconnected_hosts
                             removal_level_counters[routing_method][removal_iteration][sending_iteration] = event_counter
-                        iter_prefix = (f"output\\fat_tree_{k}_{balance_name}_removal_{links_to_remove:.2f}_"
-                                       f"remove{removal_iteration}_{routing_method}")
+                            # peak link load for this event
+                            peak_load = max(event_counter.values()) if event_counter else 0
+                            removal_level_peak_loads[routing_method][removal_iteration][sending_iteration] = peak_load
+
+                        iter_prefix = (
+                            f"output\\fat_tree_{k}_{balance_name}_removal_{links_to_remove:.2f}_"
+                            f"remove{removal_iteration}_{routing_method}"
+                        )
+
                 print("saving histograms")
                 for routing_method in routing_methods:
-                    package_prefix = (f"output\\fat_tree_{k}_{balance_name}_removal_{links_to_remove:.2f}_"
-                                      f"{routing_method}_package")
+                    package_prefix = (
+                        f"output\\fat_tree_{k}_{balance_name}_removal_{links_to_remove:.2f}_"
+                        f"{routing_method}_package"
+                    )
                     # flatten the list of lists of Counters
-                    all_counters = [counter for rem_counters in removal_level_counters[routing_method]
-                                    for counter in rem_counters]
+                    all_counters = [
+                        counter
+                        for rem_counters in removal_level_counters[routing_method]
+                        for counter in rem_counters
+                    ]
+                    average_disconnected_freq = (disconnected_hosts_counter[routing_method] / (
+                                sending_iterations * removal_iterations)) / (k ** 3 // 4)
                     save_link_histogram(
                         per_event_counters=all_counters,
                         total_links=total_links,
                         save_path=f"{package_prefix}_hist.png",
-                        title=(f"link oversubscription histogram k={k} {balance_name} \nlinked_removed={links_to_remove:.2f} "
-                               f"{routing_method} all removal iterations")
+                        title=(
+                            f"Links Oversubscription Distribution.\n k={k} {balance_name} "
+                            f"removed ={links_to_remove*100:.2f%} links {routing_method}"
+                        ),
+                        average_disconnected_freq=average_disconnected_freq
                     )
 
+                    peak_vals = [
+                        v
+                        for rem_list in removal_level_peak_loads[routing_method]
+                        for v in rem_list
+                    ]
+                    if peak_vals:
+                        avg_peak = float(sum(peak_vals)) / float(len(peak_vals))
+                    else:
+                        avg_peak = 0.0
+                    avg_peakload_by_removal[routing_method][links_to_remove] = avg_peak
 
+
+            # After all removal levels for this (k, balance_name), build combined ECMP & next_best_paths peak plot
+            removal_levels_sorted = sorted(
+                set(avg_peakload_by_removal["ECMP"].keys()).union(
+                    set(avg_peakload_by_removal["next_best_paths"].keys())
+                )
+            )
+            peak_vals_ecmp_sorted = [
+                avg_peakload_by_removal["ECMP"].get(lvl, 0.0)
+                for lvl in removal_levels_sorted
+            ]
+            peak_vals_nb_sorted = [
+                avg_peakload_by_removal["next_best_paths"].get(lvl, 0.0)
+                for lvl in removal_levels_sorted
+            ]
+
+            peak_save = (
+                f"output\\fat_tree_{k}_{balance_name}_removal_peak_load_combined.png"
+            )
+            save_metric_vs_removal_curve(
+                removal_levels_sorted,
+                peak_vals_ecmp_sorted,
+                peak_vals_nb_sorted,
+                peak_save,
+                title=(
+                    f"Max link load, ECMP vs. greedy adaptive routing\n k={k}, {balance_name} link removals"
+                ),
+                ylabel="Averaged max link load",
+            )
+
+    # end of run_test_package

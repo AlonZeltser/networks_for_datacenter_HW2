@@ -118,22 +118,23 @@ class Model:
         else:
             raise ValueError(f"Link {link} not found in {link_type} links.")
 
-    def remove_links(self, edge_aggregate: float, aggregate_core: float, balanced=True) -> None:
+    def remove_links(self, ea_anda_ac_to_remove: float, balanced:bool) -> None:
         import random
         # Remove a percentage of edge-aggregate links
         ea_links = self.links[LinkType.E_A]
-        num_ea_to_remove = int(len(ea_links) * edge_aggregate)
-        ea_links_to_choose = ea_links if balanced else ea_links[0:len(ea_links) // 3]
+        num_ea_to_remove = int(len(ea_links) * ea_anda_ac_to_remove)
+        ea_links_to_choose = ea_links if balanced else ea_links[0:max(len(ea_links) // 2, num_ea_to_remove)]
         ea_links_to_remove = random.sample(ea_links_to_choose, num_ea_to_remove)
         for link in ea_links_to_remove:
             self.links[LinkType.E_A].remove(link)
 
         # Remove a percentage of aggregate-core links
         ac_links = self.links[LinkType.A_C]
-        num_ac_to_remove = int(len(ac_links) * aggregate_core)
-        ac_links_to_choose = ac_links if balanced else ac_links[0:len(ac_links) // 3]
+        num_ac_to_remove = int(len(ac_links) * ea_anda_ac_to_remove)
+        ac_links_to_choose = ac_links if balanced else ac_links[0:max(len(ac_links) // 2, num_ac_to_remove)]
         ac_links_to_remove = random.sample(ac_links_to_choose, num_ac_to_remove)
         for link in ac_links_to_remove:
+            assert link in self.links[LinkType.A_C]
             self.links[LinkType.A_C].remove(link)
 
     def path_exist(self, path: DirectedPath) -> bool:
