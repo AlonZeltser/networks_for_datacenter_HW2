@@ -87,9 +87,18 @@ The idea was to emphasis the existence of better routing methods that can adapt 
 ## Key Results & Evidence
 Each run spans over multiple randomly chosen link removal of some fraction (to check various failures), with 2 methods: completely random failure (aka 'balanced'), and area bounded random failures (aka 'unbalanced').  
 Each random failure spans of multiple connection distributions (permutations) to get statistical robustness.
-Each run saves two kinds of artifacts per configuration:
-1. **`layout_example_*` images** – topology snapshots after link removals (balanced vs unbalanced). This images support up to k=8 for graphical limitations.
-2. **`fat_tree_*_package_hist.png` histograms** – link subscription distributions showing min/max bands, mean counts, and std bars.
+The parameters used in the experiments are:  
+- `k_s = [4, 8, 12]` – switch radices.  
+- `links_fraction_to_remove = [0.0, 0.1, 0.2, 0.3]` – removal ratios.  
+- `removal_iterations = 5` – number of random removal iterations.  
+- `sending_iterations = 5` – number of host to host permutations per removal.  
+Each run saves two kinds of artifacts per configuration:  
+1. **`layout_example_*` images** – topology snapshots after link removals (balanced vs unbalanced). This images support up to k=8 for graphical limitations.  
+2. **`fat_tree_*_package_hist.png` histograms** – link subscription distributions showing min/max bands, mean counts, and std bars.  
+  
+  
+**All the results can be found under the `experiment_outputs/` folder.**  
+
 
 ## Test Case and Analysis    
   
@@ -192,3 +201,5 @@ Adjust the parameters at the top of `run_test_package()`:
 ## Possible Next Steps
 - Extend traffic models (e.g., unbalanced peers over the layout, bursty flows) to explore additional ECMP edge cases.
 - Add CLI flags for selecting specific scenarios.
+
+## Author: Alon Zeltser

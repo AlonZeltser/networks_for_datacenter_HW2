@@ -65,7 +65,7 @@ def save_link_histogram(per_event_counters: list[Counter], total_links: int, sav
     plt.ylabel('Number of links')
     plt.title(title)
     max_bin = int(bin_centers.max()) if len(bin_centers) else 0
-    stats_text = f"events={len(per_event_counters)}\nmax_bin={max_bin}\naverage diconnected hosts={average_disconnected_freq *100:.2f%}"
+    stats_text = f"events={len(per_event_counters)}\nmax_bin={max_bin}\naverage diconnected hosts={average_disconnected_freq:.2%}"
     ax = plt.gca()
     ax.text(0.02, 0.95, stats_text, transform=ax.transAxes, fontsize=8,
             va='top', ha='left', bbox=dict(boxstyle='round', facecolor='white', alpha=0.85))
@@ -228,7 +228,7 @@ def run_test_package():
                         save_path=f"{package_prefix}_hist.png",
                         title=(
                             f"Links Oversubscription Distribution.\n k={k} {balance_name} "
-                            f"removed ={links_to_remove*100:.2f%} links {routing_method}"
+                            f"removed ={links_to_remove:.2%} links {routing_method}"
                         ),
                         average_disconnected_freq=average_disconnected_freq
                     )
